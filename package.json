@@ -1,7 +1,7 @@
 {
-  "name": "you-invest-backend",
+  "name": "h9-invest-sii",
   "version": "1.0.0",
-  "description": "Web service for You Invest",
+  "description": "You Invest Web Service",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
