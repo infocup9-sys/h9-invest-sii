@@ -1,6 +1,6 @@
 const express = require('express');
-const cors = require('cors');
 const path = require('path');
+const cors = require('cors');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -8,20 +8,24 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
-// Serve i file statici del frontend (HTML, CSS, JS) dalla stessa cartella
+// Serve tutti i file statici presenti nella cartella principale (HTML, CSS, JS, immagini)
 app.use(express.static(path.join(__dirname)));
 
-// Rotta di esempio per le API di autenticazione/stato
+// Rotte API di esempio conformi al backend
 app.post('/api/auth/login', (req, res) => {
   const { email, password } = req.body;
-  // Logica di esempio (da collegare a un database o persistenza)
-  res.json({ token: "sample-token-123", account: { email, username: "User" } });
+  res.json({ token: "live-token-session", account: { email, username: "User" } });
 });
 
 app.get('/api/account', (req, res) => {
-  res.json({ status: "active", balance: 0 });
+  res.json({ status: "active", balances: { deposit: 0, earnings: 0 } });
+});
+
+// Reindirizzamento universale per la Single Page Application
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'index.html'));
 });
 
 app.listen(PORT, () => {
-  console.log(`Server in ascolto sulla porta ${PORT}`);
+  console.log(`Server avviato sulla porta ${PORT}`);
 });
