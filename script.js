@@ -1,11 +1,10 @@
-// Gestione frontend e chiamate al backend
-console.log("You Invest script caricato correttamente.");
+// Logica principale del frontend e gestione interazioni
+console.log("You Invest - Script caricato correttamente.");
 
 document.addEventListener("DOMContentLoaded", () => {
-  // Esempio di interazione o fetch verso le API del server
-  const USE_MOCK_BACKEND = false; // Imposta su false per usare il backend Node.js
-  
+  const USE_MOCK_BACKEND = false; 
+
   if (!USE_MOCK_BACKEND) {
-    console.Collegato al Web Service Render;
+    console.log("Modalità Web Service Render attiva.");
   }
 });
