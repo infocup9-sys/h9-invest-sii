@@ -13,8 +13,14 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
-// Serve tutti i file statici della cartella (HTML, CSS, JS, immagini)
+// Serve tutti i file statici della cartella
 app.use(express.static(__dirname));
+
+// Credenziali admin iniziali (modificabili dinamicamente tramite API)
+let adminCredentials = {
+  email: "h9invest@gmail.com",
+  password: "h9invest@gmail.com"
+};
 
 // Configurazione asset Yahoo Finance
 const yahooInstruments = {
@@ -146,10 +152,35 @@ app.get('/api/asset-prices', async (req, res) => {
   }
 });
 
-// Rotte API esistenti
+// Rotta di login sicura con supporto Admin globale
 app.post('/api/auth/login', (req, res) => {
   const { email, password } = req.body;
-  res.json({ token: "live-token-session", account: { email, username: "User" } });
+
+  if (email === adminCredentials.email && password === adminCredentials.password) {
+    return res.json({ 
+      token: "admin-global-secure-token", 
+      account: { email: adminCredentials.email, username: "Administrator", role: "admin" } 
+    });
+  }
+
+  res.json({ 
+    token: "live-token-session", 
+    account: { email: email || "user@example.com", username: "User", role: "user" } 
+  });
+});
+
+// Rotta protetta per aggiornare le credenziali dell'Admin dal pannello
+app.put('/api/admin/credentials', (req, res) => {
+  const { currentEmail, currentPassword, newEmail, newPassword } = req.body;
+
+  // Verifica che le credenziali attuali siano corrette
+  if (currentEmail === adminCredentials.email && currentPassword === adminCredentials.password) {
+    if (newEmail) adminCredentials.email = newEmail;
+    if (newPassword) adminCredentials.password = newPassword;
+    return res.json({ success: true, message: "Admin credentials updated successfully" });
+  }
+
+  res.status(401).json({ success: false, message: "Invalid current admin credentials" });
 });
 
 app.get('/api/account', (req, res) => {
