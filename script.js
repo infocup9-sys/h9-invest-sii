@@ -1,13 +1,11 @@
-import { mockApiRequest } from './mock-api.js';
 import { PLANS, CUSTOM_ASSETS, calendarDaysBetween } from './investment-model.js';
 import { DAILY_PRIZES, REWARDS } from './rewards-model.js';
 import { translatePage, translateText } from './localization.js';
-import { getMarketQuote, refreshMarketQuotes } from './market-prices.js';
+import { getMarketQuote, refreshMarketQuotes, getMarketHistory, refreshMarketHistory } from './market-prices.js';
+import { API_BASE_URL } from './api-config.js';
 
 const SESSION_KEY = 'h9-test-session-v1';
 const LANGUAGE_KEY = 'h9-interface-language-v1';
-const USE_MOCK_BACKEND = true;
-const RENDER_API_BASE = '';
 const DAY_MS = 86_400_000;
 const NETWORKS = {
   bep20: 'BNB Chain · BEP-20',
@@ -38,18 +36,21 @@ let customDraft = null;
 let selectedHistoryFilter = 'all';
 let toastTimer;
 let marketRefreshTimer;
+let marketHistoryRequest = null;
+let catalogHistoryTimer;
 let wheelSpinning = false;
 let pullStartY = null;
 let depositAddresses = { bep20: '', bitcoin: '', trc20: '' };
 
 async function apiRequest(path, options = {}) {
-  if (USE_MOCK_BACKEND) return mockApiRequest(path, options, accessToken);
   const headers = new Headers(options.headers || {});
   if (accessToken) headers.set('Authorization', `Bearer ${accessToken}`);
   if (options.body) headers.set('Content-Type', 'application/json');
-  const response = await fetch(`${RENDER_API_BASE}${path}`, { ...options, headers });
+  const response = await fetch(`${API_BASE_URL}${path}`, { ...options, headers });
   const result = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(result.error || 'Service temporarily unavailable.');
+  if (!response.ok || result.success === false) {
+    throw new Error(result.error || result.message || 'Service temporarily unavailable.');
+  }
   return result;
 }
 
@@ -193,6 +194,14 @@ function signOut() {
   $('auth-screen').hidden = true;
   $('landing').hidden = false;
   showAuthMode('login');
+  if (name === 'catalog') {
+    loadAssetHistory();
+    if (!catalogHistoryTimer) {
+      catalogHistoryTimer = setInterval(() => {
+        if (!document.hidden && $('view-catalog').classList.contains('active')) loadAssetHistory();
+      }, 60_000);
+    }
+  }
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -388,6 +397,91 @@ function renderMarketQuoteContent(assetName) {
   const marketTime = new Date(quote.marketAt).toLocaleString(LANGUAGE_LOCALES[language] || 'en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
   const price = [quote.currency, value, quote.unit].filter(Boolean).join(' ');
   return `<span>${translateText('Market quote', language)}</span><b>${price}</b><small>${esc(quote.instrument)} · ${esc(quote.provider)} · ${marketTime}</small>`;
+}
+
+const HISTORY_ASSETS = [
+  ['gold', 'Gold', '#e8bf68'], ['oil', 'Oil', '#e68d64'], ['electricity', 'Electricity', '#79e2d5'],
+  ['sp500', 'S&P 500', '#8bd482'], ['nasdaq', 'NASDAQ', '#79a8fa'], ['tesla', 'Tesla', '#f17d91'],
+  ['artificialIntelligence', 'Artificial intelligence', '#bd92ef'], ['bitcoin', 'Bitcoin', '#f2a24b'], ['ethereum', 'Ethereum', '#8da9ff'],
+];
+
+function renderAssetHistoryChart() {
+  const chart = $('asset-history-chart');
+  if (!chart) return;
+  const history = getMarketHistory();
+  const locale = LANGUAGE_LOCALES[language] || 'en-US';
+  const series = HISTORY_ASSETS.flatMap(([key, name, color]) => {
+    const points = [...(history?.histories?.[key] || [])];
+    const quote = getMarketQuote(name);
+    const price = Number(quote?.price);
+    const time = Number(quote?.marketAt);
+    if (Number.isFinite(price) && price > 0 && Number.isFinite(time) && time > 0) {
+      const latest = points.at(-1);
+      if (!latest || time > latest.time) points.push({ time, value: price });
+      else if (time === latest.time) points[points.length - 1] = { time, value: price };
+    }
+    return points.length > 1 ? [{ key, name, color, points }] : [];
+  });
+  if (!series.length) {
+    chart.innerHTML = '<p>' + translateText(history ? 'No historical market data available.' : 'Historical market data is loading...', language) + '</p>';
+    $('asset-history-legend').innerHTML = '';
+    $('asset-history-source').textContent = '';
+    return;
+  }
+  const allPoints = series.flatMap((item) => item.points);
+  const firstTime = Math.min(...allPoints.map((point) => point.time));
+  const lastTime = Math.max(...allPoints.map((point) => point.time));
+  const changes = series.flatMap((item) => item.points.map((point) => (point.value / item.points[0].value - 1) * 100));
+  let min = Math.min(0, ...changes);
+  let max = Math.max(0, ...changes);
+  const padding = Math.max((max - min) * 0.12, 1);
+  min -= padding;
+  max += padding;
+  const left = 46, right = 708, top = 12, bottom = 224;
+  const x = (time) => left + (time - firstTime) / Math.max(1, lastTime - firstTime) * (right - left);
+  const y = (value) => bottom - (value - min) / (max - min) * (bottom - top);
+  const grid = Array.from({ length: 5 }, (_, index) => {
+    const value = max - (max - min) * index / 4;
+    const position = y(value);
+    return '<line class="asset-history-grid" x1="' + left + '" y1="' + position + '" x2="' + right + '" y2="' + position + '"></line><text x="' + (left - 7) + '" y="' + (position + 3) + '" text-anchor="end">' + value.toFixed(1) + '%</text>';
+  }).join('');
+  const lines = series.map((item) => {
+    const base = item.points[0].value;
+    const points = item.points.map((point) => x(point.time).toFixed(1) + ',' + y((point.value / base - 1) * 100).toFixed(1)).join(' ');
+    return '<polyline fill="none" stroke="' + item.color + '" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" points="' + points + '"><title>' + esc(item.name) + '</title></polyline>';
+  }).join('');
+  const startLabel = new Date(firstTime).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
+  const endLabel = new Date(lastTime).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
+  chart.innerHTML = '<svg viewBox="0 0 720 250" role="img" aria-label="' + esc(translateText('Real-time asset prices', language)) + '"><g>' + grid + '</g>' + lines + '<text x="' + left + '" y="244">' + esc(startLabel) + '</text><text x="' + right + '" y="244" text-anchor="end">' + esc(endLabel) + '</text></svg>';
+  $('asset-history-legend').innerHTML = series.map((item) => {
+    const points = item.points;
+    const change = (points.at(-1).value / points[0].value - 1) * 100;
+    const value = (change > 0 ? '+' : '') + change.toLocaleString(locale, { maximumFractionDigits: 1 }) + '%';
+    const quote = getMarketQuote(item.name);
+    const price = Number(quote?.price);
+    const livePrice = Number.isFinite(price)
+      ? ' · ' + [quote.currency, price.toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 }), quote.unit].filter(Boolean).join(' ')
+      : '';
+    return '<span><i style="background:' + item.color + '"></i>' + esc(item.name) + ' ' + value + livePrice + '</span>';
+  }).join('');
+  const providers = [...new Set(Object.values(history.histories).map((points) => points.provider).filter(Boolean))];
+  const sourceNames = ['Yahoo Finance', 'Kraken', 'Energy-Charts'];
+  $('asset-history-source').textContent = translateText('Live market quotes ·', language) + ' ' + (providers.length ? providers.join(' · ') : sourceNames.join(' · '));
+}
+
+function loadAssetHistory() {
+  if (marketHistoryRequest) return marketHistoryRequest;
+  marketHistoryRequest = Promise.all([refreshMarketQuotes(), refreshMarketHistory()]).then(([, history]) => {
+    updateVisibleMarketQuotes();
+    if (history) renderAssetHistoryChart();
+    else {
+      $('asset-history-chart').innerHTML = '<p>' + translateText('Market data unavailable', language) + '</p>';
+      $('asset-history-legend').innerHTML = '';
+    }
+  }).finally(() => {
+    marketHistoryRequest = null;
+  });
+  return marketHistoryRequest;
 }
 
 function updateVisibleMarketQuotes() {
@@ -860,6 +954,9 @@ function render() {
   $('user-chip').textContent = current.username;
   $('profile-username').textContent = current.username;
   $('profile-email').textContent = current.email;
+  if ($('admin-new-email') && document.activeElement !== $('admin-new-email')) {
+    $('admin-new-email').value = current.email;
+  }
   $('profile-account-id').textContent = current.id;
   $('profile-avatar').textContent = [...current.username][0].toLocaleUpperCase('it-IT');
   language = LANGUAGES.includes(current.preferences?.language) ? current.preferences.language : 'en';
@@ -948,6 +1045,7 @@ function render() {
   renderRewards();
   $('home-plans').innerHTML = PLANS.map((plan) => renderPlan(plan, true)).join('');
   $('catalog-plans').innerHTML = PLANS.map((plan) => renderPlan(plan)).join('');
+  renderAssetHistoryChart();
   renderCustomPlan();
   renderAdmin();
   translatePage(language);
@@ -1276,6 +1374,43 @@ async function login(event) {
     return;
   } finally {
     submitButton.disabled = false;
+  }
+}
+
+async function updateAdminCredentials(event) {
+  event.preventDefault();
+  if (!current || current.role !== 'admin') return;
+  setError('admin-credentials-error');
+  const form = event.currentTarget;
+  const button = form.querySelector('[type="submit"]');
+  const currentPassword = $('admin-current-password').value;
+  const newEmail = $('admin-new-email').value.trim().toLowerCase();
+  const newPassword = $('admin-new-password').value;
+  if (newPassword !== $('admin-confirm-password').value) {
+    setError('admin-credentials-error', 'New passwords do not match.');
+    return;
+  }
+  button.disabled = true;
+  try {
+    const result = await apiRequest('/api/admin/credentials', {
+      method: 'PUT',
+      body: JSON.stringify({
+        currentEmail: current.email, currentPassword, newEmail, newPassword,
+      }),
+    });
+    if (result.token) {
+      accessToken = result.token;
+      sessionStorage.setItem(SESSION_KEY, accessToken);
+    }
+    current.email = result.email || result.account?.email || newEmail;
+    $('profile-email').textContent = current.email;
+    form.reset();
+    $('admin-new-email').value = current.email;
+    toast(result.message || 'Admin credentials updated.');
+  } catch (error) {
+    setError('admin-credentials-error', error.message);
+  } finally {
+    button.disabled = false;
   }
 }
 
@@ -1700,6 +1835,7 @@ $('edit-withdrawal-pin-button').addEventListener('click', () => {
   $('withdrawal-pin-form').reset();
   $('withdrawal-pin-dialog').showModal();
 });
+$('admin-credentials-form').addEventListener('submit', updateAdminCredentials);
 $('admin-generate-recovery-key').addEventListener('click', async () => {
   const emailField = $('admin-recovery-email');
   if (!emailField.reportValidity()) return;

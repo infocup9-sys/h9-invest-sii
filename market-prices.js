@@ -1,3 +1,5 @@
+import { API_BASE_URL } from "./api-config.js";
+
 const CACHE_KEY = "h9-live-market-prices-v1";
 const assetKeys = {
   Gold: "gold",
@@ -29,7 +31,7 @@ export function getMarketQuote(assetName) {
 
 export async function refreshMarketQuotes() {
   try {
-    const response = await fetch("/api/asset-prices", { cache: "no-store" });
+    const response = await fetch(`${API_BASE_URL}/api/asset-prices`, { cache: "no-store" });
     if (!response.ok) return marketCache.quotes;
     const data = await response.json();
     const nextQuotes = { ...marketCache.quotes };
@@ -46,4 +48,28 @@ export async function refreshMarketQuotes() {
     }
   } catch {}
   return marketCache.quotes;
+}
+
+let marketHistory = null;
+
+export function getMarketHistory() {
+  return marketHistory;
+}
+
+export async function refreshMarketHistory() {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/asset-history`, { cache: "no-store" });
+    if (!response.ok) return marketHistory;
+    const data = await response.json();
+    const histories = Object.fromEntries(Object.entries(data?.histories || {}).flatMap(([key, points]) => {
+      const valid = Array.isArray(points)
+        ? points.map((point) => ({ time: Number(point.time), value: Number(point.value) }))
+          .filter((point) => Number.isFinite(point.time) && Number.isFinite(point.value))
+          .sort((a, b) => a.time - b.time)
+        : [];
+      return valid.length > 1 ? [[key, valid]] : [];
+    }));
+    marketHistory = { histories, fetchedAt: Number(data.fetchedAt) || Date.now() };
+  } catch {}
+  return marketHistory;
 }

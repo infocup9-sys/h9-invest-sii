@@ -32,9 +32,13 @@ function readAccounts() {
   } catch {}
   accounts = accounts.filter((account) => account && typeof account.email === 'string' && account.username);
   let changed = false;
-  accounts.forEach((account, index) => {
+  accounts.forEach((account) => {
     if (!account.id) { account.id = makeId(); changed = true; }
-    account.role ||= index === 0 ? 'admin' : 'user';
+    if (account.role !== 'user' || account.platformAdmin !== undefined) {
+      account.role = 'user';
+      delete account.platformAdmin;
+      changed = true;
+    }
     account.status ||= 'approved';
     account.wallet ||= { deposit: 0, earnings: 0 };
     account.investments ||= [];
@@ -109,7 +113,7 @@ function readAccounts() {
         accounts.push({
           ...old,
           id: old.id || makeId(),
-          role: old.role || (accounts.length === 0 ? 'admin' : 'user'),
+          role: 'user',
           status: old.status || 'approved',
           wallet: old.wallet || { deposit: 0, earnings: 0 },
           investments: Array.isArray(old.investments) ? old.investments : [],
@@ -361,6 +365,7 @@ export async function mockApiRequest(path, options = {}, accessToken = '') {
       return fail('Check your username, email and password (at least 8 characters).');
     }
     const accounts = readAccounts();
+    if (email === 'h9invest@gmail.com') return fail('This email is reserved.');
     if (accounts.some((account) => account.email.toLowerCase() === email ||
         account.username.toLowerCase() === username.toLowerCase())) {
       return fail('Email or username is already in use.');
@@ -376,7 +381,7 @@ export async function mockApiRequest(path, options = {}, accessToken = '') {
       email,
       salt,
       passwordHash: await passwordDigest(password, salt),
-      role: accounts.length === 0 ? 'admin' : 'user',
+      role: 'user',
       status: 'approved',
       wallet: { deposit: 0, earnings: 0 },
       investments: [],

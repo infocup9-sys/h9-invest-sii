@@ -139,7 +139,7 @@
     <main class="auth-screen" id="auth-screen" hidden>
       <button class="auth-back" type="button" id="auth-back">← Back to home</button>
       <div class="brand auth-brand"><span class="brand-mark">YI</span><span>YOU <b>INVEST</b></span></div>
-      <div class="status-banner"><span>ACCOUNT INFORMATION</span> Account information is saved in this browser.</div>
+      <div class="status-banner"><span>ACCOUNT INFORMATION</span> Account information is synchronized with the service.</div>
       <section class="auth-card">
         <div id="auth-entry">
           <div class="auth-heading"><p class="eyebrow">YOUR ACCOUNT</p><h1 id="auth-title">Welcome back</h1><p id="auth-subtitle">Sign in to your You Invest account.</p></div>
@@ -167,7 +167,7 @@
             <p class="modal-copy">Do not have a key?</p>
             <button class="text-button" id="email-support-button" type="button">Email support for a recovery key</button>
             <small class="modal-copy">This opens a prefilled draft in your email app; it does not send automatically.</small>
-            <small class="modal-copy">Local accounts cannot be recovered from another browser or device.</small>
+            <small class="modal-copy">Account recovery is verified by the central service.</small>
           </form>
           <form id="password-reset-form" class="auth-form password-reset-form" hidden>
             <div class="auth-heading"><p class="eyebrow">ACCOUNT RECOVERY</p><h2>Set a new password</h2></div>
@@ -194,7 +194,7 @@
           </form>
         </div>
       </section>
-      <p class="auth-footnote">Account information is saved in this browser.</p>
+      <p class="auth-footnote">Account information is synchronized with the service.</p>
     </main>
 
     <main class="app-shell" id="app-shell" hidden>
@@ -241,6 +241,12 @@
       <section class="view" id="view-catalog" aria-labelledby="catalog-title">
         <div class="page-heading"><div><p class="eyebrow">PLATFORM PLANS</p><h1 id="catalog-title">Plans</h1></div></div>
         <p class="page-intro">Portfolio values follow live market prices during fixed 6-month, 1-, 2-, 3- or 5-year contracts. Profits above the locked initial capital can be redeemed at any time; a 20% loss suspends exposure.</p>
+        <section class="market-history-card" aria-labelledby="asset-history-title">
+          <div class="market-history-heading"><div><p class="eyebrow">LAST 24 HOURS</p><h2 id="asset-history-title">Real-time asset prices</h2></div><span>Change (%)</span></div>
+          <div id="asset-history-chart" class="asset-history-chart" aria-live="polite"><p>Historical market data is loading...</p></div>
+          <div id="asset-history-legend" class="asset-history-legend"></div>
+          <p id="asset-history-source" class="asset-history-source"></p>
+        </section>
         <section class="custom-plan-card" id="custom-plan-section" aria-labelledby="custom-plan-title"></section>
         <div class="plan-list" id="catalog-plans"></div>
       </section>
@@ -261,7 +267,7 @@
         <div class="page-heading"><div><p class="eyebrow">YOUR ACCOUNT</p><h1 id="profile-title">Profile</h1></div></div>
         <section class="profile-card"><span class="profile-avatar" id="profile-avatar">H</span><span class="profile-user"><b id="profile-username">—</b><small id="profile-email">—</small></span><span class="verified-badge">Account</span></section>
         <section class="profile-balances"><div><span>Deposit balance</span><b id="profile-deposit">0.00 USDT</b><small>Available for investments</small></div><div><span>Earnings balance</span><b class="green" id="profile-earnings">0.00 USDT</b><small>Available for withdrawal requests</small></div></section>
-        <section class="info-card"><div class="info-row"><span>Account ID</span><b id="profile-account-id">—</b></div><div class="info-row"><span>Account storage</span><b>Current browser</b></div><div class="info-row"><span>Price / network</span><b>Not verified on-chain</b></div></section>
+        <section class="info-card"><div class="info-row"><span>Account ID</span><b id="profile-account-id">—</b></div><div class="info-row"><span>Account storage</span><b>Central service</b></div><div class="info-row"><span>Price / network</span><b>Not verified on-chain</b></div></section>
         <details class="info-card company-contact-card profile-company-info">
           <summary class="profile-company-summary">
             <span class="profile-company-icon" aria-hidden="true">i</span>
@@ -396,6 +402,18 @@
         <div class="page-heading"><div><p class="eyebrow">ADMINISTRATION</p><h1 id="admin-title">Admin</h1></div></div>
         <p class="page-intro">Review requests and manage account information.</p>
         <div class="admin-section">
+          <div class="section-heading"><div><p class="eyebrow">ADMIN ACCESS</p><h2>Admin credentials</h2></div></div>
+          <p class="page-intro">Update the administrator email and password. The change is stored by the central service.</p>
+          <form class="deposit-address-settings" id="admin-credentials-form">
+            <label for="admin-current-password">Current password<input type="password" id="admin-current-password" autocomplete="current-password" required></label>
+            <label for="admin-new-email">New admin email<input type="email" id="admin-new-email" autocomplete="email" required></label>
+            <label for="admin-new-password">New password<input type="password" id="admin-new-password" minlength="8" autocomplete="new-password" required></label>
+            <label for="admin-confirm-password">Confirm new password<input type="password" id="admin-confirm-password" minlength="8" autocomplete="new-password" required></label>
+            <p class="form-error" id="admin-credentials-error" role="alert"></p>
+            <button class="primary-button" type="submit">Update admin credentials</button>
+          </form>
+        </div>
+        <div class="admin-section">
           <div class="section-heading"><div><p class="eyebrow">DEPOSIT NETWORKS</p><h2>Deposit addresses</h2></div></div>
           <p class="page-intro">Enter the platform's verified public receiving address for each network.</p>
           <div class="deposit-address-settings">
@@ -408,7 +426,7 @@
         <div class="admin-section">
           <div class="section-heading"><div><p class="eyebrow">ACCOUNT RECOVERY</p><h2>Issue recovery key</h2></div></div>
           <p class="page-intro">Enter a registered account email. Generate the recovery key and link, then send the link to the user from the support email. It is shown once and replaces any previous key.</p>
-          <p class="page-intro">Accounts and keys exist only in this browser in local mode.</p>
+          <p class="page-intro">Accounts and recovery keys are managed by the central service.</p>
           <div class="deposit-address-settings">
             <label for="admin-recovery-email">Account email<input type="email" id="admin-recovery-email" autocomplete="email" placeholder="user@email.com" required></label>
             <button class="outline-wide" id="admin-generate-recovery-key" type="button">Generate recovery key</button>
@@ -554,7 +572,7 @@
         <input id="confirm-new-password" type="password" minlength="8" autocomplete="new-password" required>
         <p class="form-error" id="password-error" role="alert"></p>
         <button class="primary-button" type="submit">Update password</button>
-        <p class="modal-footnote">Account credentials are stored locally in this browser.</p>
+        <p class="modal-footnote">Credentials are managed by the central service.</p>
       </form>
     </dialog>
 

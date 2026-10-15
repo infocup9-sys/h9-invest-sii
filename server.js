@@ -1,31 +1,3 @@
-import express from 'express';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import cors from 'cors';
-import axios from 'axios';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-const app = express();
-const PORT = process.env.PORT || 3000;
-
-app.use(cors());
-app.use(express.json());
-
-// Serve tutti i file statici della cartella
-app.use(express.static(__dirname));
-
-// Credenziali admin iniziali (aggiornabili via API)
-let adminCredentials = {
-  email: "h9invest@gmail.com",
-  password: "h9invest@gmail.com"
-};
-
-// Database utenti temporaneo in memoria per la sessione del server
-const registeredUsers = new Map();
-
-// Configurazione asset Yahoo Finance
 const yahooInstruments = {
   gold: { symbol: "GC=F", instrument: "Gold futures · USD per troy ounce" },
   oil: { symbol: "CL=F", instrument: "WTI crude futures · USD per barrel" },
@@ -38,23 +10,31 @@ const yahooInstruments = {
 let cachedQuotes = null;
 let cachedAt = 0;
 let refreshInFlight = null;
+let cachedHistory = null;
+let historyAt = 0;
+let historyInFlight = null;
 
 async function fetchJson(url, yahooRequest = false) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
   try {
-    const response = await axios.get(url, {
-      timeout: 8000,
+    const response = await fetch(url, {
       headers: yahooRequest
         ? { accept: "application/json", "user-agent": "Mozilla/5.0 (compatible; YouInvestMarket/1.0)", referer: "https://finance.yahoo.com/" }
         : { accept: "application/json" },
+      signal: controller.signal,
     });
-    return response.data;
+    if (!response.ok) return null;
+    return await response.json();
   } catch {
     return null;
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
 async function yahooQuote(key, asset) {
-  const url = `https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(asset.symbol)}?range=1d&interval=1m`;
+  const url = "https://query2.finance.yahoo.com/v8/finance/chart/" + encodeURIComponent(asset.symbol) + "?range=1d&interval=1m";
   const body = await fetchJson(url, true);
   const result = body?.chart?.result?.[0];
   const meta = result?.meta;
@@ -96,7 +76,7 @@ async function electricityQuote(now) {
   const start = new Date(now - 72 * 60 * 60 * 1000).toISOString();
   const end = new Date(now).toISOString();
   const params = new URLSearchParams({ bzn: "DE-LU", start, end });
-  const body = await fetchJson(`https://api.energy-charts.info/price?${params}`);
+  const body = await fetchJson("https://api.energy-charts.info/price?" + params);
   if (!Array.isArray(body?.unix_seconds) || !Array.isArray(body?.price)) return null;
   let latest = -1;
   for (let i = 0; i < body.unix_seconds.length; i += 1) {
@@ -117,6 +97,67 @@ async function electricityQuote(now) {
   };
 }
 
+
+async function yahooHistory(asset) {
+  const body = await fetchJson(
+    "https://query2.finance.yahoo.com/v8/finance/chart/" + encodeURIComponent(asset.symbol) + "?range=1d&interval=1m",
+    true,
+  );
+  const result = body?.chart?.result?.[0];
+  const timestamps = result?.timestamp || [];
+  const closes = result?.indicators?.quote?.[0]?.close || [];
+  const points = timestamps.flatMap((timestamp, index) => {
+    const value = Number(closes[index]);
+    return Number.isFinite(value) && value > 0
+      ? [{ time: Number(timestamp) * 1000, value }]
+      : [];
+  });
+  return points.filter((point, index) => index % 15 === 0 || index === points.length - 1);
+}
+
+function electricityHistory(body, since) {
+  return (body?.unix_seconds || []).flatMap((seconds, index) => {
+    const time = Number(seconds) * 1000;
+    const value = Number(body.price[index]);
+    return Number.isFinite(time) && time >= since * 1000 && Number.isFinite(value)
+      ? [{ time, value }]
+      : [];
+  });
+}
+
+async function loadAssetHistory() {
+  const now = Date.now();
+  const since = Math.floor((now - 24 * 60 * 60 * 1000) / 1000);
+  const electricityParams = new URLSearchParams({
+    bzn: "DE-LU",
+    start: new Date(now - 72 * 60 * 60 * 1000).toISOString(),
+    end: new Date(now).toISOString(),
+  });
+  const [yahooEntries, bitcoinBody, ethereumBody, bitcoinYahoo, ethereumYahoo, electricityBody] = await Promise.all([
+    Promise.all(Object.entries(yahooInstruments).map(async ([key, asset]) => [key, await yahooHistory(asset)])),
+    fetchJson("https://api.kraken.com/0/public/OHLC?pair=XBTUSD&interval=30&since=" + since),
+    fetchJson("https://api.kraken.com/0/public/OHLC?pair=ETHUSD&interval=30&since=" + since),
+    yahooHistory({ symbol: "BTC-USD" }),
+    yahooHistory({ symbol: "ETH-USD" }),
+    fetchJson("https://api.energy-charts.info/price?" + electricityParams),
+  ]);
+  const histories = Object.fromEntries(yahooEntries.filter(([, points]) => points.length));
+  for (const [key, body, fallback] of [["bitcoin", bitcoinBody, bitcoinYahoo], ["ethereum", ethereumBody, ethereumYahoo]]) {
+    const result = body?.result || {};
+    const ticker = Object.keys(result).find((name) => name !== "last");
+    const points = (ticker ? result[ticker] : []).flatMap((row) => {
+      const value = Number(row[4]);
+      return Number.isFinite(value) && value > 0 ? [{ time: Number(row[0]) * 1000, value }] : [];
+    });
+    const fallbackPoints = fallback.filter((point) => Number.isFinite(point.value) && point.value > 0);
+    if (points.length) histories[key] = points;
+    else if (fallbackPoints.length) histories[key] = fallbackPoints;
+  }
+  const electricity = electricityHistory(electricityBody, since);
+  if (electricity.length) histories.electricity = electricity;
+  return { histories, fetchedAt: Date.now() };
+}
+
 async function loadQuotes() {
   const now = Date.now();
   const [entries, crypto, electricity] = await Promise.all([
@@ -130,11 +171,26 @@ async function loadQuotes() {
   return { quotes, fetchedAt: Date.now() };
 }
 
-// Rotta API per i prezzi degli asset
-app.get('/api/asset-prices', async (req, res) => {
-  try {
+export default {
+  async fetch(request) {
+    const url = new URL(request.url);
+    if (request.method !== "GET") return new Response("Not found", { status: 404 });
+    if (url.pathname === "/api/asset-history") {
+      if (cachedHistory && Date.now() - historyAt < 20_000) {
+        return Response.json(cachedHistory, { headers: { "Cache-Control": "no-store" } });
+      }
+      if (!historyInFlight) {
+        historyInFlight = loadAssetHistory().then((data) => {
+          cachedHistory = data;
+          historyAt = Date.now();
+          return cachedHistory;
+        }).finally(() => { historyInFlight = null; });
+      }
+      return Response.json(await historyInFlight, { headers: { "Cache-Control": "no-store" } });
+    }
+    if (url.pathname !== "/api/asset-prices") return new Response("Not found", { status: 404 });
     if (cachedQuotes && Date.now() - cachedAt < 60_000) {
-      return res.setHeader("Cache-Control", "no-store").json(cachedQuotes);
+      return Response.json(cachedQuotes, { headers: { "Cache-Control": "no-store" } });
     }
     if (!refreshInFlight) {
       refreshInFlight = loadQuotes().then((data) => {
@@ -149,76 +205,6 @@ app.get('/api/asset-prices', async (req, res) => {
       }).finally(() => { refreshInFlight = null; });
     }
     const data = await refreshInFlight;
-    res.setHeader("Cache-Control", "no-store").json(data);
-  } catch (err) {
-    res.status(500).json({ error: "Failed to fetch market data" });
-  }
-});
-
-// Registrazione utenti (Blocca l'email riservata dell'admin)
-app.post('/api/auth/register', (req, res) => {
-  const { email, password, username } = req.body || {};
-  if (!email || !password) {
-    return res.status(400).json({ error: "Email and password are required" });
-  }
-  if (email.toLowerCase() === adminCredentials.email.toLowerCase()) {
-    return res.status(403).json({ error: "This email address is reserved" });
-  }
-  registeredUsers.set(email.toLowerCase(), { email, password, username: username || "User", role: "user" });
-  res.json({ success: true, message: "User registered successfully" });
-});
-
-// Login Sicuro (Restituisce 401 in caso di credenziali non valide)
-app.post('/api/auth/login', (req, res) => {
-  const { email, password } = req.body || {};
-
-  if (!email || !password) {
-    return res.status(401).json({ error: "Invalid credentials" });
-  }
-
-  // Controllo credenziali Admin
-  if (email.toLowerCase() === adminCredentials.email.toLowerCase() && password === adminCredentials.password) {
-    return res.json({ 
-      token: "admin-global-secure-token", 
-      account: { email: adminCredentials.email, username: "Administrator", role: "admin" } 
-    });
-  }
-
-  // Controllo credenziali Utente normale
-  const existingUser = registeredUsers.get(email.toLowerCase());
-  if (existingUser && existingUser.password === password) {
-    return res.json({ 
-      token: `user-token-${Date.now()}`, 
-      account: { email: existingUser.email, username: existingUser.username, role: "user" } 
-    });
-  }
-
-  // Credenziali errate
-  res.status(401).json({ error: "Invalid email or password" });
-});
-
-// Rotta protetta per aggiornare le credenziali Admin dal pannello
-app.put('/api/admin/credentials', (req, res) => {
-  const { currentEmail, currentPassword, newEmail, newPassword } = req.body || {};
-
-  if (currentEmail?.toLowerCase() === adminCredentials.email.toLowerCase() && currentPassword === adminCredentials.password) {
-    if (newEmail) adminCredentials.email = newEmail;
-    if (newPassword) adminCredentials.password = newPassword;
-    return res.json({ success: true, message: "Admin credentials updated successfully" });
-  }
-
-  res.status(401).json({ success: false, message: "Invalid current admin credentials" });
-});
-
-app.get('/api/account', (req, res) => {
-  res.json({ status: "active", balances: { deposit: 0, earnings: 0 } });
-});
-
-// Reindirizzamento universale per SPA
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'index.html'));
-});
-
-app.listen(PORT, () => {
-  console.log(`Server avviato sulla porta ${PORT}`);
-});
+    return Response.json(data, { headers: { "Cache-Control": "no-store" } });
+  },
+};
