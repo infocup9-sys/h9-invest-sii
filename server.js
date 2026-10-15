@@ -16,11 +16,14 @@ app.use(express.json());
 // Serve tutti i file statici della cartella
 app.use(express.static(__dirname));
 
-// Credenziali admin iniziali (modificabili dinamicamente tramite API)
+// Credenziali admin iniziali (aggiornabili via API)
 let adminCredentials = {
   email: "h9invest@gmail.com",
   password: "h9invest@gmail.com"
 };
+
+// Database utenti temporaneo in memoria per la sessione del server
+const registeredUsers = new Map();
 
 // Configurazione asset Yahoo Finance
 const yahooInstruments = {
@@ -152,29 +155,53 @@ app.get('/api/asset-prices', async (req, res) => {
   }
 });
 
-// Rotta di login sicura con supporto Admin globale
-app.post('/api/auth/login', (req, res) => {
-  const { email, password } = req.body;
+// Registrazione utenti (Blocca l'email riservata dell'admin)
+app.post('/api/auth/register', (req, res) => {
+  const { email, password, username } = req.body || {};
+  if (!email || !password) {
+    return res.status(400).json({ error: "Email and password are required" });
+  }
+  if (email.toLowerCase() === adminCredentials.email.toLowerCase()) {
+    return res.status(403).json({ error: "This email address is reserved" });
+  }
+  registeredUsers.set(email.toLowerCase(), { email, password, username: username || "User", role: "user" });
+  res.json({ success: true, message: "User registered successfully" });
+});
 
-  if (email === adminCredentials.email && password === adminCredentials.password) {
+// Login Sicuro (Restituisce 401 in caso di credenziali non valide)
+app.post('/api/auth/login', (req, res) => {
+  const { email, password } = req.body || {};
+
+  if (!email || !password) {
+    return res.status(401).json({ error: "Invalid credentials" });
+  }
+
+  // Controllo credenziali Admin
+  if (email.toLowerCase() === adminCredentials.email.toLowerCase() && password === adminCredentials.password) {
     return res.json({ 
       token: "admin-global-secure-token", 
       account: { email: adminCredentials.email, username: "Administrator", role: "admin" } 
     });
   }
 
-  res.json({ 
-    token: "live-token-session", 
-    account: { email: email || "user@example.com", username: "User", role: "user" } 
-  });
+  // Controllo credenziali Utente normale
+  const existingUser = registeredUsers.get(email.toLowerCase());
+  if (existingUser && existingUser.password === password) {
+    return res.json({ 
+      token: `user-token-${Date.now()}`, 
+      account: { email: existingUser.email, username: existingUser.username, role: "user" } 
+    });
+  }
+
+  // Credenziali errate
+  res.status(401).json({ error: "Invalid email or password" });
 });
 
-// Rotta protetta per aggiornare le credenziali dell'Admin dal pannello
+// Rotta protetta per aggiornare le credenziali Admin dal pannello
 app.put('/api/admin/credentials', (req, res) => {
-  const { currentEmail, currentPassword, newEmail, newPassword } = req.body;
+  const { currentEmail, currentPassword, newEmail, newPassword } = req.body || {};
 
-  // Verifica che le credenziali attuali siano corrette
-  if (currentEmail === adminCredentials.email && currentPassword === adminCredentials.password) {
+  if (currentEmail?.toLowerCase() === adminCredentials.email.toLowerCase() && currentPassword === adminCredentials.password) {
     if (newEmail) adminCredentials.email = newEmail;
     if (newPassword) adminCredentials.password = newPassword;
     return res.json({ success: true, message: "Admin credentials updated successfully" });
@@ -187,7 +214,7 @@ app.get('/api/account', (req, res) => {
   res.json({ status: "active", balances: { deposit: 0, earnings: 0 } });
 });
 
-// Reindirizzamento universale per la Single Page Application
+// Reindirizzamento universale per SPA
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
