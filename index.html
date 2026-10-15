@@ -1,15 +1,76 @@
 <!doctype html>
-<html lang="it">
+<html lang="en">
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#101711">
+    <meta name="description" content="You Invest · tools for exploring investment plans and account activity.[span_0](start_span)[span_0](end_span)">
+    <link rel="manifest" href="./manifest.webmanifest">
+    <link rel="icon" href="./icon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="./apple-touch-icon.png">
     <link rel="stylesheet" href="./style.css">
     <title>You Invest</title>
   </head>
   <body>
     <main class="landing" id="landing">
-      <h1>Benvenuto su You Invest</h1>
-      <p>Il progetto è online e pronto.</p>
+      <header class="landing-header">
+        <a class="brand landing-brand" href="#top" aria-label="You Invest, pagina iniziale"><span class="brand-mark">YI</span><span>YOU <b>INVEST</b></span></a>
+        <nav class="landing-nav" aria-label="Company navigation">
+          <a href="#company-info">Company &amp; legal</a>
+        </nav>
+        <div class="landing-controls">
+          <label class="landing-language-label" for="landing-language-select">Language</label>
+          <select class="landing-language-select" id="landing-language-select" aria-label="Language">
+            <option value="en">English</option><option value="fr">Français</option><option value="es">Español</option><option value="de">Deutsch</option><option value="pt">Português</option><option value="hi">हिन्दी</option><option value="zh">中文</option><option value="it">Italiano</option>
+          </select>
+          <button class="landing-login" type="button" data-auth="login">Sign in <span aria-hidden="true">↗</span></button>
+        </div>
+      </header>
+
+      <section class="landing-hero" id="top">
+        <div class="hero-copy">
+          <p class="landing-kicker"><span></span> MORE INFORMED FINANCE, ONE STEP AT A TIME</p>
+          <h1>Your decisions.<br><em>Your journey.</em></h1>
+          <p class="hero-lede">You Invest is an evolving project that aims to make tools for exploring the world of investing easier to understand.[span_1](start_span)[span_1](end_span)</p>
+          <div class="hero-actions">
+            <button class="hero-button" type="button" data-auth="register">Create an account <span aria-hidden="true">↗</span></button>
+            <a class="hero-secondary" href="#company-info">Company information <span aria-hidden="true">↓</span></a>
+          </div>
+          <p class="hero-disclaimer">Account balances and returns are calculated within this platform. Deposits and withdrawals do not send cryptocurrency.[span_2](start_span)[span_2](end_span)</p>
+        </div>
+        <div class="hero-art" aria-hidden="true">
+          <div class="orbit orbit-one"></div><div class="orbit orbit-two"></div>
+          <div class="orbit-core"><span>YI</span><i></i></div>
+          <div class="floating-note note-top"><span>01</span><b>Clarity</b></div>
+          <div class="floating-note note-bottom"><span>02</span><b>Awareness</b></div>
+          <div class="hero-spark spark-one">✳</div><div class="hero-spark spark-two">✳</div>
+        </div>
+        <a class="scroll-cue" href="#company-info"><span></span> COMPANY INFORMATION</a>
+      </section>
+
+      <div class="landing-notice"><span>PROJECT IN DEVELOPMENT</span> YOU INVEST LLC is in formation. Company and team details remain provisional and subject to confirmation.[span_3](start_span)[span_3](end_span)</div>
+
+      <details class="company-info" id="company-info">
+        <summary class="company-info-summary">
+          <span class="company-info-icon" aria-hidden="true">i</span>
+          <span class="company-info-copy"><span class="company-info-kicker">COMPANY INFORMATION</span><strong>Company &amp; legal information</strong><small>About, team, compliance, documents and contacts</small></span>
+          <span class="company-info-toggle" aria-hidden="true"></span>
+        </summary>
+        <div class="company-info-content">
+          <section class="company-section about-section" id="chi-siamo">
+            <div class="section-label"><span>01</span> THE PROJECT</div>
+            <div class="about-grid">
+              <h2>About us<span class="accent-dot">.</span></h2>
+              <div class="about-copy">
+                <p class="about-lead">We want to build a digital space where people can explore finance with greater simplicity and transparency.</p>
+                <p>Project story, pending validation: You Invest began with people interested in technology and financial innovation. The idea is to turn complex concepts into understandable experiences through educational tools. This is not a documented company history.[span_4](start_span)[span_4](end_span)</p>
+                <p>The project is still taking shape. The company, location, services, and team must be confirmed before any public launch.[span_5](start_span)[span_5](end_span)</p>
+                <div class="values-row"><span><b>01</b> Transparency</span><span><b>02</b> Simplicity</span><span><b>03</b> Responsibility</span></div>
+              </div>
+            </div>
+          </section>
+        </div>
+      </details>
     </main>
     <script type="module" src="./script.js"></script>
   </body>
