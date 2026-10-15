@@ -2057,36 +2057,46 @@ document.querySelectorAll('.modal').forEach((dialog) => dialog.addEventListener(
   if (event.target === dialog) dialog.close();
 }));
 
-resumeSession();
-setInterval(() => {
-  if (!current || document.hidden) return;
-  refreshAccount();
-}, 60_000);
-document.addEventListener('visibilitychange', () => {
-  if (!document.hidden && current) {
-    refreshAccount();
+function initializeApp() {
+  document.documentElement.lang = language;
+  $('landing-language-select').value = language;
+  translatePage(language);
+
+  const searchParams = new URLSearchParams(window.location.search);
+  $('register-referral').value = searchParams.get('ref') || '';
+  pendingPasswordResetToken = searchParams.get('reset') || '';
+
+  const recoveryFragment = location.hash.slice(1);
+  if (recoveryFragment.startsWith('recover?')) {
+    const recoveryParams = new URLSearchParams(recoveryFragment.slice('recover?'.length));
+    const recoveryEmail = recoveryParams.get('email') || '';
+    const recoveryCode = recoveryParams.get('key') || '';
+    if (recoveryEmail && recoveryCode) {
+      $('reset-email').value = recoveryEmail;
+      $('reset-recovery-key').value = recoveryCode;
+      showPasswordRecovery('request');
+      const cleanUrl = new URL(location.href);
+      cleanUrl.hash = '';
+      history.replaceState(null, '', cleanUrl);
+    }
   }
-});
-document.documentElement.lang = language;
-$('landing-language-select').value = language;
-translatePage(language);
-$('register-referral').value = new URLSearchParams(location.search).get('ref') || '';
-const recoveryFragment = location.hash.slice(1);
-if (recoveryFragment.startsWith('recover?')) {
-  const recoveryParams = new URLSearchParams(recoveryFragment.slice('recover?'.length));
-  const recoveryEmail = recoveryParams.get('email') || '';
-  const recoveryCode = recoveryParams.get('key') || '';
-  if (recoveryEmail && recoveryCode) {
-    $('reset-email').value = recoveryEmail;
-    $('reset-recovery-key').value = recoveryCode;
-    showPasswordRecovery('request');
-    const cleanUrl = new URL(location.href);
-    cleanUrl.hash = '';
-    history.replaceState(null, '', cleanUrl);
+  if (pendingPasswordResetToken) showPasswordRecovery('confirm');
+
+  resumeSession();
+  setInterval(() => {
+    if (!current || document.hidden) return;
+    refreshAccount();
+  }, 60_000);
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && current) refreshAccount();
+  });
+  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+    window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));
   }
 }
-pendingPasswordResetToken = new URLSearchParams(location.search).get('reset') || '';
-if (pendingPasswordResetToken) showPasswordRecovery('confirm');
-if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
-  window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initializeApp, { once: true });
+} else {
+  initializeApp();
 }
