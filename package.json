@@ -2,6 +2,7 @@
   "name": "h9-invest-sii",
   "version": "1.0.0",
   "description": "You Invest Web Service",
+  "type": "module",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
